@@ -1,10 +1,10 @@
 # Omi Webhook Server
 
-A Python server that receives and processes webhook notifications from the Omi app. This server handles real-time memory creation, audio streaming, and transcription events.
+A Python server that receives and processes webhook notifications from the [Omi](https://github.com/BasedHardware/omi) app. This server handles real-time memory creation, audio streaming, and transcription events for Omi wearable devices.
 
 ## Overview
 
-This server implements webhook endpoints that align with Omi's webhook system (`/app/lib/backend/http/webhooks.dart`) to handle:
+This webhook server is designed to work with all Omi wearable devices and has been confirmed working with the Dev Kit 1. Omi devices are open-source AI wearables that enable automatic, high-quality transcriptions of meetings, chats, and voice memos. The server implements webhook endpoints that align with Omi's webhook system (`/app/lib/backend/http/webhooks.dart`) to handle:
 
 1. Memory Events (from `message_event.dart`)
    - `memory_created` - New memory creation
@@ -15,7 +15,7 @@ This server implements webhook endpoints that align with Omi's webhook system (`
    - `memory_backward_synced` - Memory sync completed
 
 2. Audio Events
-   - `audio_bytes` - Real-time PCM audio streaming
+   - `audio_bytes` - Real-time PCM audio streaming from the Dev Kit 1
 
 3. Transcript Events
    - `transcript_segment` - Real-time speech-to-text segments
@@ -111,7 +111,7 @@ omi-webhook/
 │   ├── audio_events.py    # Audio streaming handlers
 │   └── transcript_events.py # Transcription handlers
 ├── tests/                 # Test suites
-│   ├── __init__.py       # Test utilities
+│   ├��─ __init__.py       # Test utilities
 │   ├── test_memory.py    # Memory event tests
 │   ├── test_audio.py     # Audio event tests
 │   ├── test_system.py    # System event tests
@@ -200,3 +200,11 @@ Note: ngrok is only needed for local development when you want to test with the 
 2. Create a feature branch
 3. Run tests: `python test.py`
 4. Create a Pull Request
+
+## Special Thanks
+
+Special thanks to [BasedHardware](https://github.com/BasedHardware) for creating the [Omi project](https://github.com/BasedHardware/omi) and making it open source. This webhook server would not be possible without their excellent work on the Omi platform and documentation.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
