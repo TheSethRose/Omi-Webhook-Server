@@ -13,6 +13,10 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy env.example as .env if no .env exists
+COPY env.example .env.example
+RUN if [ ! -f .env ]; then cp .env.example .env; fi
+
 # Copy the rest of the application
 COPY . .
 
