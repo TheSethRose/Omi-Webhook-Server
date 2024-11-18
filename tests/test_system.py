@@ -19,8 +19,21 @@ def test_system_events():
 
 def test_authentication():
     """Test authentication cases"""
-    # Test missing key
     headers = {'Content-Type': 'application/json'}
+
+    # Test valid key
+    response = requests.post(
+        f"{WEBHOOK_URL}?uid=test-user-1&key={WEBHOOK_SECRET}",
+        json={"type": "ping"},
+        headers=headers
+    )
+    add_test_result(
+        'auth (valid key)',
+        response.status_code == 200,
+        f"Expected 200, got {response.status_code}"
+    )
+
+    # Test missing key
     response = requests.post(
         f"{WEBHOOK_URL}?uid=test-user-1",
         json={"type": "ping"},
