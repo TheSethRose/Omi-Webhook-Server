@@ -4,109 +4,126 @@ A Python server that receives and processes webhook notifications from the [Omi]
 
 ## Important Note
 
-This webhook server provides the foundation for receiving events from the Omi app (memory creation, audio streaming, transcripts), but it doesn't include default actions or behaviors for these events. It's essentially a listener that acknowledges receipt of events - what happens afterward depends on your implementation.
+This webhook server provides the foundation for receiving events from the Omi app (memory creation, audio streaming, transcripts), but it doesn't include default actions or behaviors for these events. You'll need to implement your own logic for handling these events.
 
-To make this server useful for your needs, you'll need to:
+## Installation
 
-1. **Define Event Behaviors**: Add your own logic to the handlers in `audio_events.py`, `memory_events.py`, etc., to process data, store it, or trigger workflows
-2. **Implement Responses**: Decide how to handle each event (e.g., save to database, trigger notifications, call other APIs)
-3. **Add Error Handling**: Ensure your custom logic handles errors gracefully
-4. **Test Your Implementation**: Validate that your added functionality works as expected
+### Option 1: Docker (Recommended)
 
-Think of this as the foundation - you'll need to build the actual functionality on top of it!
+1. Clone this repository
+2. Copy the example environment file:
 
-## Overview
+   ```bash
+   cp env.example .env
+   ```
 
-This webhook server is designed to work with all Omi wearable devices and has been confirmed working with the Dev Kit 1. Omi devices are open-source AI wearables that enable automatic, high-quality transcriptions of meetings, chats, and voice memos. The server implements webhook endpoints that align with Omi's webhook system (`/app/lib/backend/http/webhooks.dart`) to handle:
+3. Generate and set your webhook secret:
 
-1. Memory Events (from `message_event.dart`)
-   - `memory_created` - New memory creation
-   - `new_memory_create_failed` - Failed memory creation
-   - `new_processing_memory_created` - Processing memory initiated
-   - `memory_processing_started` - Memory processing started
-   - `processing_memory_status_changed` - Processing status updates
-   - `memory_backward_synced` - Memory sync completed
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))"
+   # Add the generated secret to .env
+   ```
 
-2. Audio Events
-   - `audio_bytes` - Real-time PCM audio streaming from the Dev Kit 1
+4. Start the server:
 
-3. Transcript Events
-   - `transcript_segment` - Real-time speech-to-text segments
+   ```bash
+   docker compose up -d
+   ```
 
-4. System Events
-   - `ping` - Health check endpoint
+The server will be available at `http://localhost:32768` with:
 
-## Setup
+- Automatic restarts on failure
+- Health monitoring
+- Log management
+- Dependency handling
 
-1. Install required Python packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-2. Create a `.env` file with your configuration:
+Monitor your server:
 
 ```bash
-# Generate a secret: python -c "import secrets; print(secrets.token_hex(32))"
-WEBHOOK_SECRET=your_webhook_secret_here
-PORT=32768
-HOST=0.0.0.0
-
-# Logging Configuration
-LOG_LEVEL=INFO          # Controls general logging verbosity
-LOG_EVENTS=false        # Set to true to see detailed event logs
+docker compose ps    # View status
+docker compose logs  # View logs
 ```
 
-3. Run the server:
+### Option 2: Manual Installation
+
+1. Install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Set up environment:
+
+   ```bash
+   cp env.example .env
+   # Edit .env with your settings
+   ```
+
+3. Start server:
+
+   ```bash
+   python server.py
+   ```
+
+## Configuration
+
+### Environment Variables
+
+Key settings in your `.env` file:
 
 ```bash
-python server.py
+PORT=32768                # Server port
+HOST=0.0.0.0             # Server host
+WEBHOOK_SECRET=your_key   # Authentication secret
+LOG_LEVEL=INFO           # Logging verbosity
+LOG_EVENTS=true          # Detailed event logging
 ```
 
-## Logging
+### Logging Configuration
 
-The server provides two levels of logging control:
+Two logging controls:
 
-1. `LOG_LEVEL`: Controls general logging verbosity
-   - INFO: Show basic operation logs (default)
-   - WARNING: Show only warnings and errors
-   - ERROR: Show only errors
-   - DEBUG: Show detailed debug information
-   - CRITICAL: Show only critical errors
+1. `LOG_LEVEL`: General verbosity (INFO, WARNING, ERROR, DEBUG, CRITICAL)
+2. `LOG_EVENTS`: Event detail logging (true/false)
 
-2. `LOG_EVENTS`: Controls event detail logging
-   - false: Show basic event information (default)
-   - true: Show detailed event data including request/response payloads
+Example logs:
 
-Example with LOG_EVENTS=false:
-```
+```bash
+# With LOG_EVENTS=false
 2024-03-20 14:23:06 [INFO] memory_created | uid:test-user-1 | status:200
+
+# With LOG_EVENTS=true
+2024-03-20 14:23:06 [INFO] memory_created | uid:test-user-1 | status:200 | data:{...} | response:{...}
 ```
 
-Example with LOG_EVENTS=true:
-```
-2024-03-20 14:23:06 [INFO] memory_created | uid:test-user-1 | status:200 | data:{'type': 'memory_created', 'memory': {...}} | response:{'message': 'Success'}
-```
+## Usage
 
-Note: Errors and warnings are always logged with full details regardless of LOG_EVENTS setting.
+### Webhook URL Format
 
-## Webhook Configuration in Omi
-
-In the Omi app settings, configure your webhook URL:
-
-```
+```bash
 http://your-server:32768/webhook?key=YOUR_SECRET
 ```
 
-The Omi app will automatically:
+### Supported Events
 
-- Add the `uid` parameter to requests
-- Send JSON-formatted webhook payloads
-- Include `Content-Type: application/json` header
+1. Memory Events
+   - `memory_created`: New memory creation
+   - `memory_processing_started`: Processing initiation
+   - `processing_memory_status_changed`: Status updates
+   - `memory_backward_synced`: Sync completion
 
-## Event Payloads
+2. Audio Events
+   - `audio_bytes`: Real-time PCM audio streaming
 
-1. Memory Event (from `message.dart`):
+3. Transcript Events
+   - `transcript_segment`: Real-time speech-to-text
+
+4. System Events
+   - `ping`: Health check endpoint
+
+### Event Payload Examples
+
+Memory Event:
 
 ```json
 {
@@ -114,16 +131,12 @@ The Omi app will automatically:
     "memory": {
         "id": "memory_id",
         "created_at": "ISO8601_timestamp",
-        "text": "memory_content",
-        "structured": {
-            "title": "memory_title",
-            "emoji": "memory_emoji"
-        }
+        "text": "memory_content"
     }
 }
 ```
 
-2. Audio Event:
+Audio Event:
 
 ```json
 {
@@ -132,7 +145,7 @@ The Omi app will automatically:
 }
 ```
 
-3. Transcript Event (from `transcript_segment.dart`):
+Transcript Event:
 
 ```json
 {
@@ -140,156 +153,87 @@ The Omi app will automatically:
     "segment": {
         "text": "transcribed_text",
         "start_time": 0.0,
-        "end_time": 2.5,
-        "confidence": 0.95
+        "end_time": 2.5
     }
 }
 ```
 
-## Project Structure
+## Development
 
-```
+### Project Structure
+
+```bash
 omi-webhook/
 ├── events/                 # Event handlers
-│   ├── __init__.py        # Event type exports
-│   ├── memory_events.py   # Memory event handlers
-│   ├── audio_events.py    # Audio streaming handlers
-│   └── transcript_events.py # Transcription handlers
 ├── tests/                 # Test suites
-│   ├─ __init__.py       # Test utilities
-│   ├── test_memory.py    # Memory event tests
-│   ├── test_audio.py     # Audio event tests
-│   ├── test_system.py    # System event tests
-│   └── test_transcript.py # Transcript tests
-├── server.py             # Main Flask server
+├── server.py             # Main server
 ├── test.py              # Test runner
-├── requirements.txt     # Python dependencies
 └── .env                # Configuration
 ```
 
-## Testing
+### Testing
 
-Run the test suite:
+Run tests:
+
 ```bash
 python test.py
 ```
 
-When running in Docker, the container's health check system automatically validates the server's functionality by:
-- Making periodic ping requests to the webhook endpoint
-- Validating responses
-- Automatically restarting if issues are detected
+### Local Development with Omi App
 
-You can monitor the health status using:
+1. Start server:
+
+   ```bash
+   python server.py
+   ```
+
+2. Create tunnel (for testing with Omi app):
+
+   ```bash
+   ngrok http 32768
+   ```
+
+3. Configure in Omi app:
+
+   ```bash
+   Webhook URL: https://[ngrok-url]/webhook?key=YOUR_SECRET
+   ```
+
+## Docker Details
+
+### Health Checks
+
+- 30-second interval checks
+- 3 retries before marking unhealthy
+- 5-second startup grace period
+- Automatic restart on failure
+
+Monitor health:
+
 ```bash
-docker ps  # Check STATUS column
+docker ps
 # or
 docker inspect webhook-server | grep -A 10 Health
 ```
 
 ## Security
 
-1. Authentication:
-   - URL key parameter must match WEBHOOK_SECRET
-   - Each request must include valid user ID
-
-2. Input Validation:
-   - Memory format validation
-   - Audio format validation
-   - Transcript format validation
-
-3. Error Handling:
-   - Invalid requests return 400 status
-   - Authentication failures return 401
-   - Server errors return 500
-
-## Development
-
-1. Local Testing:
-
-```bash
-# Start server
-python server.py
-
-# In another terminal
-python test.py
-```
-
-2. Testing with Omi App:
-   - Install ngrok: <https://ngrok.com/download>
-   - Start your webhook server: `python server.py`
-   - Create tunnel to your server: `ngrok http 32768`
-   - Copy the ngrok URL (e.g., `https://abc123.ngrok.io`)
-   - Configure in Omi app:
-
-     ```bash
-     Webhook URL: https://abc123.ngrok.io/webhook?key=YOUR_SECRET
-     ```
-
-   - Omi will automatically append the uid parameter
-
-Note: ngrok is only needed for local development when you want to test with the actual Omi app. For production, you'll want to host the webhook server on a proper server with a static IP/domain.
+- URL key authentication
+- User ID validation
+- Input format validation
+- Proper error status codes (400, 401, 500)
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Run tests: `python test.py`
-4. Create a Pull Request
-
-## Special Thanks
-
-Special thanks to [BasedHardware](https://github.com/BasedHardware) for creating the [Omi project](https://github.com/BasedHardware/omi) and making it open source. This webhook server would not be possible without their excellent work on the Omi platform and documentation.
+1. Fork repository
+2. Create feature branch
+3. Run tests
+4. Submit pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE)
 
-## Docker Support
+## Acknowledgments
 
-You can run the webhook server using Docker in two ways:
-
-### Using Docker Compose (Recommended)
-
-1. Make sure you have Docker and Docker Compose installed
-2. Clone this repository
-3. Run the server:   ```bash
-   docker compose up   ```
-
-### Using Docker Directly
-
-1. Build the image:   ```bash
-   docker build -t webhook-server .   ```
-
-2. Run the container:   ```bash
-   docker run -p 32768:32768 webhook-server   ```
-
-The server will be available at `http://localhost:32768`.
-
-### Environment Variables
-
-When using Docker, the environment variables are set in the `docker-compose.yml` file. You can override them by creating a `.env` file in the project root.
-
-### Health Checks
-The Docker container includes automatic health checking that:
-- Pings the webhook server every 30 seconds
-- Marks container as unhealthy after 3 failed attempts
-- Allows 5 seconds for initial startup
-- Times out health checks after 10 seconds
-
-### Auto-Restart
-The container is configured to automatically restart:
-- On failure
-- After system reboot
-- When the health check fails
-
-You can view the container's health status using:
-```bash
-docker ps  # Check STATUS column
-# or
-docker inspect webhook-server
-```
-
-To view health check logs:
-```bash
-docker inspect webhook-server | grep -A 10 Health
-```
+Special thanks to [BasedHardware](https://github.com/BasedHardware) for creating the [Omi project](https://github.com/BasedHardware/omi).
