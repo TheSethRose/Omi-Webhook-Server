@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  webhook-server:
+    build: .
+    restart: always
+    ports:
+      - "32768:32768"
+    environment:
+      - PORT=32768
+      - HOST=0.0.0.0
+      - LOG_LEVEL=INFO
+      - LOG_EVENTS=true
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+    volumes:
+      - ./webhook.log:/app/webhook.log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:32768/webhook?uid=health-check&key=${WEBHOOK_SECRET}", "-X", "POST", "-H", "Content-Type: application/json", "-d", '{"type":"ping"}']
+      interval: 300s
+      timeout: 120s
+      retries: 3
+      start_period: 5s

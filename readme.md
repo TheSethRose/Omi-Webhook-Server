@@ -169,31 +169,21 @@ omi-webhook/
 
 ## Testing
 
-1. Run all tests:
-
+Run the test suite:
 ```bash
 python test.py
 ```
 
-2. Test individual endpoints:
+When running in Docker, the container's health check system automatically validates the server's functionality by:
+- Making periodic ping requests to the webhook endpoint
+- Validating responses
+- Automatically restarting if issues are detected
 
+You can monitor the health status using:
 ```bash
-# Test ping
-curl -X POST "http://localhost:32768/webhook?uid=test-user-1&key=YOUR_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"ping"}'
-
-# Test memory creation
-curl -X POST "http://localhost:32768/webhook?uid=test-user-1&key=YOUR_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "memory_created",
-    "memory": {
-      "id": "test-1",
-      "created_at": "2024-03-19T12:00:00Z",
-      "text": "Test memory"
-    }
-  }'
+docker ps  # Check STATUS column
+# or
+docker inspect webhook-server | grep -A 10 Health
 ```
 
 ## Security
@@ -253,3 +243,53 @@ Special thanks to [BasedHardware](https://github.com/BasedHardware) for creating
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Docker Support
+
+You can run the webhook server using Docker in two ways:
+
+### Using Docker Compose (Recommended)
+
+1. Make sure you have Docker and Docker Compose installed
+2. Clone this repository
+3. Run the server:   ```bash
+   docker compose up   ```
+
+### Using Docker Directly
+
+1. Build the image:   ```bash
+   docker build -t webhook-server .   ```
+
+2. Run the container:   ```bash
+   docker run -p 32768:32768 webhook-server   ```
+
+The server will be available at `http://localhost:32768`.
+
+### Environment Variables
+
+When using Docker, the environment variables are set in the `docker-compose.yml` file. You can override them by creating a `.env` file in the project root.
+
+### Health Checks
+The Docker container includes automatic health checking that:
+- Pings the webhook server every 30 seconds
+- Marks container as unhealthy after 3 failed attempts
+- Allows 5 seconds for initial startup
+- Times out health checks after 10 seconds
+
+### Auto-Restart
+The container is configured to automatically restart:
+- On failure
+- After system reboot
+- When the health check fails
+
+You can view the container's health status using:
+```bash
+docker ps  # Check STATUS column
+# or
+docker inspect webhook-server
+```
+
+To view health check logs:
+```bash
+docker inspect webhook-server | grep -A 10 Health
+```
