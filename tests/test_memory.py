@@ -6,69 +6,131 @@ from . import WEBHOOK_URL, WEBHOOK_SECRET, add_test_result
 
 def test_memory_events():
     """Test all memory event types - success and failure cases"""
-    # Success cases
-    memory_events = [
-        ('memory_created', {
+    # Test memory created (full format from Omi)
+    send_test_webhook(
+        'memory_created',
+        {
             "type": "memory_created",
             "memory": {
                 "id": "test-memory-1",
                 "created_at": "2024-03-19T12:00:00Z",
-                "text": "Test memory content",
+                "started_at": "2024-03-19T11:55:00Z",
+                "finished_at": "2024-03-19T12:00:00Z",
+                "transcript": "Test memory content",
+                "transcript_segments": [
+                    {
+                        "text": "Test memory content",
+                        "speaker": "SPEAKER_00",
+                        "speakerId": 0,
+                        "is_user": True,
+                        "start": 0.0,
+                        "end": 5.0
+                    }
+                ],
+                "photos": [],
                 "structured": {
                     "title": "Test Memory",
-                    "emoji": "📝"
+                    "overview": "Brief overview",
+                    "emoji": "📝",
+                    "category": "personal",
+                    "action_items": [
+                        {
+                            "description": "Test action item",
+                            "completed": False
+                        }
+                    ],
+                    "events": []
                 }
             }
-        }, 200, {"message": "Memory processed successfully"}),
-        ('new_memory_create_failed', {
+        },
+        200,
+        {"message": "Memory processed successfully"}
+    )
+
+    # Test memory creation failed
+    send_test_webhook(
+        'new_memory_create_failed',
+        {
             "type": "new_memory_create_failed",
             "error": "Test error message"
-        }, 200, {"message": "Failure logged"}),
-        ('new_processing_memory_created', {
+        },
+        200,
+        {"message": "Failure logged"}
+    )
+
+    # Test new processing memory created
+    send_test_webhook(
+        'new_processing_memory_created',
+        {
             "type": "new_processing_memory_created",
             "memory": {
                 "id": "test-memory-2",
                 "status": "processing_started"
             }
-        }, 200, {"message": "Processing memory created"}),
-        ('memory_processing_started', {
+        },
+        200,
+        {"message": "Processing memory created"}
+    )
+
+    # Test memory processing started
+    send_test_webhook(
+        'memory_processing_started',
+        {
             "type": "memory_processing_started",
             "memory": {
                 "id": "test-memory-1",
                 "status": "processing"
             }
-        }, 200, {"message": "Processing started"}),
-        ('processing_memory_status_changed', {
+        },
+        200,
+        {"message": "Processing started"}
+    )
+
+    # Test memory status changed
+    send_test_webhook(
+        'processing_memory_status_changed',
+        {
             "type": "processing_memory_status_changed",
             "memory": {
                 "id": "test-memory-1",
                 "status": "completed"
             }
-        }, 200, {"message": "Status updated"}),
-        ('memory_backward_synced', {
+        },
+        200,
+        {"message": "Status updated"}
+    )
+
+    # Test memory synced
+    send_test_webhook(
+        'memory_backward_synced',
+        {
             "type": "memory_backward_synced",
             "memory": {
                 "id": "test-memory-1",
                 "sync_status": "completed"
             }
-        }, 200, {"message": "Memory synced"})
-    ]
+        },
+        200,
+        {"message": "Memory synced"}
+    )
 
-    # Test success cases
-    for event_type, data, status, response in memory_events:
-        send_test_webhook(event_type, data, status, response)
-
-    # Test failure cases
+    # Test missing memory data
     send_test_webhook(
         'memory_created (missing data)',
-        {"type": "memory_created"},
+        {
+            "type": "memory_created"
+        },
         400,
         {"error": "Missing memory data"}
     )
 
+    # Test invalid memory format
     send_test_webhook(
         'memory_created (invalid memory)',
-        {"type": "memory_created", "memory": {}},
+        {
+            "type": "memory_created",
+            "memory": {}
+        },
         400,
         {"error": "Missing memory data"}
     )
@@ -76,10 +138,11 @@ def test_memory_events():
 def send_test_webhook(event_type, data, expected_status, expected_response):
     """Send test webhook and verify response"""
     headers = {'Content-Type': 'application/json'}
+    url = f"{WEBHOOK_URL}?uid=test-user-1&key={WEBHOOK_SECRET}"
 
     try:
         response = requests.post(
-            f"{WEBHOOK_URL}?uid=test-user-1&key={WEBHOOK_SECRET}",
+            url,
             json=data,
             headers=headers
         )
@@ -88,31 +151,15 @@ def send_test_webhook(event_type, data, expected_status, expected_response):
         print(f"Status Code: {response.status_code}")
         print(f"Response: {response.text}")
 
-        # Verify response
-        status_matches = response.status_code == expected_status
-        content_matches = True
-
-        if expected_response:
-            try:
-                response_json = response.json()
-                content_matches = all(
-                    response_json.get(k) == v
-                    for k, v in expected_response.items()
-                )
-            except:
-                content_matches = False
-
-        success = status_matches and content_matches
-        message = []
-        if not status_matches:
-            message.append(f"Expected status {expected_status}, got {response.status_code}")
-        if not content_matches:
-            message.append(f"Response content didn't match expected: {expected_response}")
+        success = (
+            response.status_code == expected_status and
+            response.json() == expected_response
+        )
 
         add_test_result(
             event_type,
             success,
-            " AND ".join(message) if message else "Test passed"
+            "Test passed" if success else f"Expected {expected_status} {expected_response}, got {response.status_code} {response.text}"
         )
 
     except Exception as e:

@@ -1,81 +1,72 @@
 """
 Omi App Webhook Server - Transcript Event Handlers
-
-Handles real-time transcript segments from Omi app's speech-to-text service.
-Based on transcript_segment.dart and webhooks.dart
 """
 import json
 import logging
-from flask import jsonify
+from flask import jsonify, request
 import os
 
 logger = logging.getLogger('events.transcript_events')
 
-# List of transcript event types from message_event.dart
-TRANSCRIPT_EVENTS = [
-    'transcript_segment'
-]
+TRANSCRIPT_EVENTS = []  # No event types needed since we handle it directly
 
-# Get event logging preference
 LOG_EVENTS = os.getenv('LOG_EVENTS', 'false').lower() in ('true', '1', 'yes')
 
 def handle_transcript_webhook(event_type, data, uid):
-    """Route transcript events to appropriate handler
+    """Handle transcript segments from Omi App
 
-    Args:
-        event_type (str): Type of transcript event
-        data (dict): Webhook payload
-        uid (str): User ID from Omi app
+    Receives array of segments directly in request body:
+    [
+        {
+            "text": "Segment text",
+            "speaker": "SPEAKER_00",
+            "speakerId": 0,
+            "is_user": false,
+            "start": 10.0,
+            "end": 20.0
+        }
+        // More segments...
+    ]
     """
-    handlers = {
-        'transcript_segment': handle_transcript_event
-    }
+    # Get session_id from query params as documented
+    session_id = request.args.get('session_id')
+    if not session_id:
+        return jsonify({'error': 'Missing session_id parameter'}), 400
 
-    handler = handlers.get(event_type)
-    if not handler:
-        return jsonify({'error': 'Unknown transcript event type'}), 400
+    # Data should be array of segments
+    if not isinstance(data, list):
+        return jsonify({'error': 'Invalid format - expected array of segments'}), 400
 
-    return handler(data.get('segment', data), uid)
+    # Validate each segment
+    for segment in data:
+        # Check required fields exist
+        required_fields = ['text', 'speaker', 'speakerId', 'is_user', 'start', 'end']
+        for field in required_fields:
+            if field not in segment:
+                return jsonify({'error': f'Missing required field in segment: {field}'}), 400
 
-def handle_transcript_event(segment, uid):
-    """Handle real-time transcript segment events
+        # Validate field types
+        if not isinstance(segment['text'], str):
+            return jsonify({'error': 'text must be string'}), 400
 
-    Args:
-        segment (dict): Transcript segment from Omi's speech-to-text
-        uid (str): User ID
+        if not isinstance(segment['speaker'], str):
+            return jsonify({'error': 'speaker must be string'}), 400
 
-    Segment format (from transcript_segment.dart):
-    {
-        "text": str,           # Transcribed text
-        "start_time": float,   # Start time in seconds
-        "end_time": float,     # End time in seconds
-        "confidence": float    # Confidence score 0-1
-    }
-    """
-    # Check for missing data
-    if not segment:
-        return jsonify({'error': 'Missing segment data'}), 400
+        if not isinstance(segment['speakerId'], int):
+            return jsonify({'error': 'speakerId must be integer'}), 400
 
-    # Validate required fields
-    required_fields = ['text', 'start_time', 'end_time', 'confidence']
-    if not all(field in segment for field in required_fields):
-        return jsonify({'error': 'Invalid segment format'}), 400
+        if not isinstance(segment['is_user'], bool):
+            return jsonify({'error': 'is_user must be boolean'}), 400
 
-    # Validate field types
-    try:
-        assert isinstance(segment['text'], str), "text must be string"
-        assert isinstance(segment['start_time'], (int, float)), "start_time must be numeric"
-        assert isinstance(segment['end_time'], (int, float)), "end_time must be numeric"
-        assert isinstance(segment['confidence'], (int, float)), "confidence must be numeric"
-        assert 0 <= segment['confidence'] <= 1, "confidence must be between 0 and 1"
-        assert segment['start_time'] <= segment['end_time'], "start_time must be <= end_time"
-    except AssertionError as e:
-        return jsonify({'error': f'Invalid segment format: {str(e)}'}), 400
+        if not (isinstance(segment['start'], (int, float)) and isinstance(segment['end'], (int, float))):
+            return jsonify({'error': 'start and end must be numbers'}), 400
+
+        # Validate time values
+        if segment['start'] > segment['end']:
+            return jsonify({'error': 'start time must be <= end time'}), 400
 
     if LOG_EVENTS:
-        logger.info(f"Transcript: {json.dumps(segment, indent=2)}")
-
-    # TODO: Add your transcript processing logic here
-    # Example: Store in database, real-time analysis, etc.
+        logger.info(f"Received {len(data)} segments for session {session_id}")
+        logger.info(f"Segments: {json.dumps(data, indent=2)}")
 
     return jsonify({'message': 'Success'}), 200

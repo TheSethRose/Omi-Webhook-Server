@@ -81,54 +81,49 @@ def log_webhook_event(event_type, uid, data, response):
             logger.info(f"{event_type} | uid:{uid} | status:{status_code} | data:{data} | response:{response}")
 
 @app.route('/webhook', methods=['POST'])
-def handle_webhook():
-    """Main webhook handler for all Omi events"""
-    # Get request data
-    data = request.get_json()
+def webhook():
+    """Handle incoming webhooks from Omi App"""
+    # Validate webhook key
+    webhook_key = request.args.get('key')
+    if not webhook_key or webhook_key != WEBHOOK_SECRET:
+        return 'Invalid webhook key', 401
+
+    # Get user ID
     uid = request.args.get('uid')
-    key = request.args.get('key')
+    if not uid:
+        return 'Missing uid parameter', 400
 
-    # Verify webhook key
-    if not verify_key(key):
-        response = ('Invalid webhook key', 401)
-        log_webhook_event('unknown', uid, data, response)
-        return response
-
-    if not data or not uid:
-        response = ('Missing required data', 400)
-        log_webhook_event('unknown', uid, data, response)
-        return response
+    # Get request data
+    if request.headers.get('Content-Type') == 'application/octet-stream':
+        # Handle audio data
+        return handle_audio_webhook(None, None, uid)
 
     try:
-        # Handle different event types
-        event_type = data.get('type', 'memory_created')
-
-        # Memory Events
-        if event_type in MEMORY_EVENTS:
-            response = handle_memory_webhook(event_type, data, uid)
-        # Audio Events
-        elif event_type in AUDIO_EVENTS:
-            response = handle_audio_webhook(event_type, data, uid)
-        # Transcript Events
-        elif event_type in TRANSCRIPT_EVENTS:
-            response = handle_transcript_webhook(event_type, data, uid)
-        # System Events
-        elif event_type in SYSTEM_EVENTS:
-            response = handle_system_webhook(event_type, data, uid)
-        else:
-            response = (jsonify({'error': 'Unknown event type'}), 400)
-            log_webhook_event(event_type, uid, data, response)
-            return response
-
-        # Log the event and response
-        log_level = logging.ERROR if response[1] >= 400 else logging.INFO
-        log_webhook_event(event_type, uid, data, response)
-        return response
-
+        data = request.get_json()
     except Exception as e:
-        response = (jsonify({'error': str(e)}), 500)
-        log_webhook_event(event_type, uid, data, response)
-        return response
+        return jsonify({'error': 'Invalid JSON data'}), 400
+
+    # Special case: Transcript webhooks send array directly
+    if isinstance(data, list):
+        # For transcripts, session_id is required in query params
+        session_id = request.args.get('session_id')
+        if not session_id:
+            return jsonify({'error': 'Missing session_id parameter'}), 400
+        return handle_transcript_webhook(None, data, uid)
+
+    # For all other webhooks, expect type field
+    event_type = data.get('type')
+    if not event_type:
+        return jsonify({'error': 'Missing event type'}), 400
+
+    # Route to appropriate handler
+    if event_type == 'ping':
+        logger.info(f"Received ping from user {uid}")
+        return jsonify({'message': 'pong'}), 200
+    elif event_type in MEMORY_EVENTS:
+        return handle_memory_webhook(event_type, data, uid)
+    else:
+        return jsonify({'error': 'Unknown event type'}), 400
 
 def cleanup():
     """Cleanup function to be called on shutdown"""

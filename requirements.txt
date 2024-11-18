@@ -3,3 +3,4 @@ python-dotenv
 requests
 python-dateutil
 gunicorn
+numpy

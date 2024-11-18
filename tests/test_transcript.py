@@ -5,83 +5,111 @@ import requests
 from . import WEBHOOK_URL, WEBHOOK_SECRET, add_test_result
 
 def test_transcript_events():
-    """Test transcript event types - success and failure cases"""
-    # Success case
+    """Test transcript event handling - success and failure cases"""
+    # Test valid transcript segments
     send_test_webhook(
-        'transcript_segment',
-        {
-            "type": "transcript_segment",
-            "segment": {
-                "text": "This is a test transcript",
-                "start_time": 0.0,
-                "end_time": 2.5,
-                "confidence": 0.95
+        'valid_segments',
+        [
+            {
+                "text": "Test segment",
+                "speaker": "SPEAKER_00",
+                "speakerId": 0,
+                "is_user": True,
+                "start": 0.0,
+                "end": 1.0
             }
-        },
+        ],
         200,
-        {"message": "Success"}
+        {"message": "Success"},
+        session_id="test-session-1"
     )
 
-    # Failure cases
+    # Test missing session_id
     send_test_webhook(
-        'transcript_segment (missing data)',
-        {"type": "transcript_segment"},
+        'missing_session_id',
+        [
+            {
+                "text": "Test segment",
+                "speaker": "SPEAKER_00",
+                "speakerId": 0,
+                "is_user": True,
+                "start": 0.0,
+                "end": 1.0
+            }
+        ],
         400,
-        {"error": "Invalid segment format"}
+        {"error": "Missing session_id parameter"}
     )
 
+    # Test invalid segment format
     send_test_webhook(
-        'transcript_segment (invalid format)',
-        {"type": "transcript_segment", "segment": {"text": ""}},
+        'invalid_segment',
+        [
+            {
+                "text": "Test segment",
+                "speaker": "SPEAKER_00",
+                # Missing required fields
+                "start": 0.0,
+                "end": 1.0
+            }
+        ],
         400,
-        {"error": "Invalid segment format"}
+        {"error": "Missing required field in segment: speakerId"},
+        session_id="test-session-1"
     )
 
-def send_test_webhook(event_type, data, expected_status, expected_response):
+    # Test invalid time values
+    send_test_webhook(
+        'invalid_time_values',
+        [
+            {
+                "text": "Test segment",
+                "speaker": "SPEAKER_00",
+                "speakerId": 0,
+                "is_user": True,
+                "start": 2.0,
+                "end": 1.0  # End before start
+            }
+        ],
+        400,
+        {"error": "start time must be <= end time"},
+        session_id="test-session-1"
+    )
+
+def send_test_webhook(test_name, data, expected_status, expected_response, session_id=None):
     """Send test webhook and verify response"""
     headers = {'Content-Type': 'application/json'}
 
+    # Build URL with parameters
+    url = f"{WEBHOOK_URL}?uid=test-user-1&key={WEBHOOK_SECRET}"
+    if session_id:
+        url += f"&session_id={session_id}"
+
     try:
         response = requests.post(
-            f"{WEBHOOK_URL}?uid=test-user-1&key={WEBHOOK_SECRET}",
+            url,
             json=data,
             headers=headers
         )
 
-        print(f"\nTesting {event_type}:")
+        print(f"\nTesting {test_name}:")
         print(f"Status Code: {response.status_code}")
         print(f"Response: {response.text}")
 
-        # Verify response
-        status_matches = response.status_code == expected_status
-        content_matches = True
-
-        if expected_response:
-            try:
-                response_json = response.json()
-                content_matches = all(
-                    response_json.get(k) == v
-                    for k, v in expected_response.items()
-                )
-            except:
-                content_matches = False
-
-        success = status_matches and content_matches
-        message = []
-        if not status_matches:
-            message.append(f"Expected status {expected_status}, got {response.status_code}")
-        if not content_matches:
-            message.append(f"Response content didn't match expected: {expected_response}")
+        success = (
+            response.status_code == expected_status and
+            response.json() == expected_response
+        )
 
         add_test_result(
-            event_type,
+            test_name,
             success,
-            " AND ".join(message) if message else "Test passed"
+            "Test passed" if success else f"Expected {expected_status} {expected_response}, got {response.status_code} {response.text}"
         )
 
     except Exception as e:
         add_test_result(
-            event_type,
+            test_name,
             False,
             f"Request failed: {str(e)}"
         )
