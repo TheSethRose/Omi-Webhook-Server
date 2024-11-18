@@ -2,6 +2,19 @@
 
 A Python server that receives and processes webhook notifications from the [Omi](https://github.com/BasedHardware/omi) app. This server handles real-time memory creation, audio streaming, and transcription events for Omi wearable devices.
 
+## Important Note
+
+This webhook server provides the foundation for receiving events from the Omi app (memory creation, audio streaming, transcripts), but it doesn't include default actions or behaviors for these events. It's essentially a listener that acknowledges receipt of events - what happens afterward depends on your implementation.
+
+To make this server useful for your needs, you'll need to:
+
+1. **Define Event Behaviors**: Add your own logic to the handlers in `audio_events.py`, `memory_events.py`, etc., to process data, store it, or trigger workflows
+2. **Implement Responses**: Decide how to handle each event (e.g., save to database, trigger notifications, call other APIs)
+3. **Add Error Handling**: Ensure your custom logic handles errors gracefully
+4. **Test Your Implementation**: Validate that your added functionality works as expected
+
+Think of this as the foundation - you'll need to build the actual functionality on top of it!
+
 ## Overview
 
 This webhook server is designed to work with all Omi wearable devices and has been confirmed working with the Dev Kit 1. Omi devices are open-source AI wearables that enable automatic, high-quality transcriptions of meetings, chats, and voice memos. The server implements webhook endpoints that align with Omi's webhook system (`/app/lib/backend/http/webhooks.dart`) to handle:
@@ -37,6 +50,11 @@ pip install -r requirements.txt
 # Generate a secret: python -c "import secrets; print(secrets.token_hex(32))"
 WEBHOOK_SECRET=your_webhook_secret_here
 PORT=32768
+HOST=0.0.0.0
+
+# Logging Configuration
+LOG_LEVEL=INFO          # Controls general logging verbosity
+LOG_EVENTS=false        # Set to true to see detailed event logs
 ```
 
 3. Run the server:
@@ -44,6 +62,33 @@ PORT=32768
 ```bash
 python server.py
 ```
+
+## Logging
+
+The server provides two levels of logging control:
+
+1. `LOG_LEVEL`: Controls general logging verbosity
+   - INFO: Show basic operation logs (default)
+   - WARNING: Show only warnings and errors
+   - ERROR: Show only errors
+   - DEBUG: Show detailed debug information
+   - CRITICAL: Show only critical errors
+
+2. `LOG_EVENTS`: Controls event detail logging
+   - false: Show basic event information (default)
+   - true: Show detailed event data including request/response payloads
+
+Example with LOG_EVENTS=false:
+```
+2024-03-20 14:23:06 [INFO] memory_created | uid:test-user-1 | status:200
+```
+
+Example with LOG_EVENTS=true:
+```
+2024-03-20 14:23:06 [INFO] memory_created | uid:test-user-1 | status:200 | data:{'type': 'memory_created', 'memory': {...}} | response:{'message': 'Success'}
+```
+
+Note: Errors and warnings are always logged with full details regardless of LOG_EVENTS setting.
 
 ## Webhook Configuration in Omi
 
@@ -111,7 +156,7 @@ omi-webhook/
 │   ├── audio_events.py    # Audio streaming handlers
 │   └── transcript_events.py # Transcription handlers
 ├── tests/                 # Test suites
-│   ├��─ __init__.py       # Test utilities
+│   ├─ __init__.py       # Test utilities
 │   ├── test_memory.py    # Memory event tests
 │   ├── test_audio.py     # Audio event tests
 │   ├── test_system.py    # System event tests

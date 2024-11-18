@@ -4,13 +4,17 @@ Omi App Webhook Server - Audio Event Handlers
 import json
 import logging
 from flask import jsonify
+import os
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('events.audio_events')
 
 # List of audio event types
 AUDIO_EVENTS = [
     'audio_bytes'
 ]
+
+# Get event logging preference
+LOG_EVENTS = os.getenv('LOG_EVENTS', 'false').lower() in ('true', '1', 'yes')
 
 def handle_audio_webhook(event_type, data, uid):
     """Route audio events to appropriate handler"""
@@ -29,11 +33,11 @@ def handle_audio_event(audio, uid):
         return jsonify({'error': 'Missing audio data'}), 400
 
     try:
-        # Validate audio format
         bytes.fromhex(audio)
     except ValueError:
         return jsonify({'error': 'Invalid audio format'}), 400
 
-    logger.info(f"Processing audio bytes for user {uid}")
-    logger.info(f"Audio length: {len(audio)} bytes")
+    if LOG_EVENTS:
+        logger.info(f"Audio received: {len(audio)} bytes")
+
     return jsonify({'message': 'Success'}), 200

@@ -7,13 +7,17 @@ Based on transcript_segment.dart and webhooks.dart
 import json
 import logging
 from flask import jsonify
+import os
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('events.transcript_events')
 
 # List of transcript event types from message_event.dart
 TRANSCRIPT_EVENTS = [
     'transcript_segment'
 ]
+
+# Get event logging preference
+LOG_EVENTS = os.getenv('LOG_EVENTS', 'false').lower() in ('true', '1', 'yes')
 
 def handle_transcript_webhook(event_type, data, uid):
     """Route transcript events to appropriate handler
@@ -68,8 +72,8 @@ def handle_transcript_event(segment, uid):
     except AssertionError as e:
         return jsonify({'error': f'Invalid segment format: {str(e)}'}), 400
 
-    logger.info(f"Processing transcript segment for user {uid}")
-    logger.info(f"Segment data: {json.dumps(segment, indent=2)}")
+    if LOG_EVENTS:
+        logger.info(f"Transcript: {json.dumps(segment, indent=2)}")
 
     # TODO: Add your transcript processing logic here
     # Example: Store in database, real-time analysis, etc.

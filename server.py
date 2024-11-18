@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 import signal
 import atexit
+from logging import StreamHandler
+from logging.handlers import RotatingFileHandler
 
 # Add the current directory to Python path
 sys.path.append(str(Path(__file__).parent))
@@ -27,9 +29,21 @@ from events import (
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure basic logging
+logging.basicConfig(
+    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper()),
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Silence Flask's werkzeug logger
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
+# Create logger
 logger = logging.getLogger(__name__)
+
+# Simple LOG_EVENTS check
+LOG_EVENTS = os.getenv('LOG_EVENTS', 'false').lower() in ('true', '1', 'yes')
 
 app = Flask(__name__)
 
@@ -50,14 +64,25 @@ def verify_key(key):
 def handle_system_webhook(event_type, data, uid):
     """Handle system events like ping"""
     if event_type == 'ping':
-        logger.info(f"Received ping from user {uid}")
+        if LOG_EVENTS:
+            logger.info(f"Received ping from user {uid}")
         return jsonify({'message': 'pong'}), 200
     return jsonify({'error': 'Unknown system event'}), 400
+
+def log_webhook_event(event_type, uid, data, response):
+    """Simple event logger"""
+    status_code = response[1] if isinstance(response, tuple) else 200
+
+    # Only log event details if LOG_EVENTS is true
+    if LOG_EVENTS:
+        if status_code >= 400:
+            logger.info(f"{event_type} | uid:{uid} | status:{status_code} | data:{data} | response:{response}")
+        else:
+            logger.info(f"{event_type} | uid:{uid} | status:{status_code} | data:{data} | response:{response}")
 
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     """Main webhook handler for all Omi events"""
-
     # Get request data
     data = request.get_json()
     uid = request.args.get('uid')
@@ -65,13 +90,14 @@ def handle_webhook():
 
     # Verify webhook key
     if not verify_key(key):
-        return 'Invalid webhook key', 401
+        response = ('Invalid webhook key', 401)
+        log_webhook_event('unknown', uid, data, response)
+        return response
 
     if not data or not uid:
-        return 'Missing required data', 400
-
-    # Log the webhook event
-    logger.info(f"Received webhook from user {uid}")
+        response = ('Missing required data', 400)
+        log_webhook_event('unknown', uid, data, response)
+        return response
 
     try:
         # Handle different event types
@@ -79,27 +105,30 @@ def handle_webhook():
 
         # Memory Events
         if event_type in MEMORY_EVENTS:
-            return handle_memory_webhook(event_type, data, uid)
-
+            response = handle_memory_webhook(event_type, data, uid)
         # Audio Events
         elif event_type in AUDIO_EVENTS:
-            return handle_audio_webhook(event_type, data, uid)
-
+            response = handle_audio_webhook(event_type, data, uid)
         # Transcript Events
         elif event_type in TRANSCRIPT_EVENTS:
-            return handle_transcript_webhook(event_type, data, uid)
-
+            response = handle_transcript_webhook(event_type, data, uid)
         # System Events
         elif event_type in SYSTEM_EVENTS:
-            return handle_system_webhook(event_type, data, uid)
-
+            response = handle_system_webhook(event_type, data, uid)
         else:
-            logger.warning(f"Unknown event type: {event_type}")
-            return jsonify({'error': 'Unknown event type'}), 400
+            response = (jsonify({'error': 'Unknown event type'}), 400)
+            log_webhook_event(event_type, uid, data, response)
+            return response
+
+        # Log the event and response
+        log_level = logging.ERROR if response[1] >= 400 else logging.INFO
+        log_webhook_event(event_type, uid, data, response)
+        return response
 
     except Exception as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        response = (jsonify({'error': str(e)}), 500)
+        log_webhook_event(event_type, uid, data, response)
+        return response
 
 def cleanup():
     """Cleanup function to be called on shutdown"""
